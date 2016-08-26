@@ -22,18 +22,10 @@ convert bytes to Object or Object to bytes:
 
     String data = "AA11220008556677889911223344556677";
     byte[] bytes = hexToBytes(data);
+    // bytes to object
     TargetObject targetObject = TargetObjectPacketParser.parse(bytes); // suffix with "PacketParser"
-    assertEquals((byte) 0xAA, targetObject.header);
-    assertEquals(0x1122, targetObject.cmd);
-    assertEquals(0x0008, targetObject.len);
-    assertEquals(0x5566, targetObject.seq);
-    assertArrayEquals(new byte[]{0x77, (byte) 0x88, (byte) 0x99, 0x11, 0x22, 0x33}, targetObject.mac);
-    assertArrayEquals(new byte[]{0x44, 0x55}, targetObject.data);
-    assertEquals(0x66, targetObject.check);
-    assertEquals(0x77, targetObject.tail);
-
+    //object to bytes
     byte[] toBytes = TargetObjectPacketParser.toBytes(targetObject);
-    assertArrayEquals(bytes, toBytes);
 
 # gradle
 
