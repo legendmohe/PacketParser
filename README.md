@@ -65,5 +65,5 @@ convert bytes to object
 
 # gradle
 
-compile 'com.legendmohe.maven:packetparser-annonation:0.1'
-apt 'com.legendmohe.maven:packetparser-complier:0.1'
+    compile 'com.legendmohe.maven:packetparser-annonation:0.1'
+    apt 'com.legendmohe.maven:packetparser-complier:0.1'
