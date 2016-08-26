@@ -1,0 +1,79 @@
+apply plugin: 'com.android.library'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'com.github.dcendents.android-maven'
+
+def getBaseVersion() {
+    def versionPropsFile = file('version.properties')
+    if (versionPropsFile.canRead()) {
+        def Properties versionProps = new Properties()
+        versionProps.load(new FileInputStream(versionPropsFile))
+        return versionProps['VERSION_CODE']
+    } else {
+        throw new GradleException("Could not read version.properties!")
+    }
+}
+
+def getVCSVersion() {
+    def projectVersion = 'git rev-list --count HEAD'.execute().text.trim()
+    return projectVersion
+}
+
+ext {
+    baseVersion = getBaseVersion()
+    version = ext.baseVersion + "." + getVCSVersion()
+
+    println("baseVersion:" + baseVersion + " | version:" + version)
+
+    bintrayRepo = 'maven'
+    bintrayName = 'packetparser'
+
+    publishedGroupId = 'com.legendmohe.maven'
+    libraryName = 'packetparser'
+    artifact = 'packetparser'
+
+    siteUrl = 'https://github.com/legendmohe/PacketParser'
+    gitUrl = 'https://github.com/legendmohe/PacketParser.git'
+
+    libraryDescription = 'Packet parser'
+    libraryVersion = version
+
+    developerId = 'legendmohe'
+    developerName = 'Xinyu he'
+    developerEmail = 'legendmohe@foxmail.com'
+
+    licenseName = 'The Apache Software License, Version 2.0'
+    licenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+    allLicenses = ["Apache-2.0"]
+}
+
+android {
+    compileSdkVersion 23
+    buildToolsVersion "23.0.3"
+
+    defaultConfig {
+        minSdkVersion 17
+        targetSdkVersion 23
+        versionCode = baseVersion
+        versionName = version
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile files('libs/packetparser-annotation.jar')
+    testCompile 'junit:junit:4.12'
+}
+
+task processorTask(type: Exec) {
+    commandLine 'cp', '../packetparser-annotation/build/libs/packetparser-annotation.jar', 'libs/'
+}
+processorTask.dependsOn(':packetparser-annotation:build')
+preBuild.dependsOn(processorTask)
+
+apply from: 'https://raw.githubusercontent.com/attwellBrian/JCenter/master/installv1.gradle'
+apply from: 'https://raw.githubusercontent.com/attwellBrian/JCenter/master/bintrayv1.gradle'

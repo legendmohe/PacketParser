@@ -1,0 +1,60 @@
+apply plugin: 'java'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'com.github.dcendents.android-maven'
+
+def getBaseVersion() {
+    def versionPropsFile = file('version.properties')
+    if (versionPropsFile.canRead()) {
+        def Properties versionProps = new Properties()
+        versionProps.load(new FileInputStream(versionPropsFile))
+        return versionProps['VERSION_CODE']
+    } else {
+        throw new GradleException("Could not read version.properties!")
+    }
+}
+
+def getVCSVersion() {
+    def projectVersion = 'git rev-list --count HEAD'.execute().text.trim()
+    return projectVersion
+}
+
+ext {
+    baseVersion = getBaseVersion()
+    version = ext.baseVersion + "." + getVCSVersion()
+
+    println("baseVersion:" + baseVersion + " | version:" + version)
+
+    bintrayRepo = 'maven'
+    bintrayName = 'packetparser-complier'
+
+    publishedGroupId = 'com.legendmohe.maven'
+    libraryName = 'packetparser-complier'
+    artifact = 'packetparser-complier'
+
+    siteUrl = 'https://github.com/legendmohe/PacketParser'
+    gitUrl = 'https://github.com/legendmohe/PacketParser.git'
+
+    libraryDescription = 'Packet parser'
+    libraryVersion = version
+
+    developerId = 'legendmohe'
+    developerName = 'Xinyu he'
+    developerEmail = 'legendmohe@foxmail.com'
+
+    licenseName = 'The Apache Software License, Version 2.0'
+    licenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+    allLicenses = ["Apache-2.0"]
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_7
+targetCompatibility = JavaVersion.VERSION_1_7
+
+dependencies {
+    compile project(':packetparser-annotation')
+    compile 'com.google.auto.service:auto-service:1.0-rc2'
+    compile files('libs/auto-common-0.6.jar')
+    compile files('libs/javapoet-1.7.0.jar')
+}
+
+apply from: 'https://raw.githubusercontent.com/attwellBrian/JCenter/master/installv1.gradle'
+apply from: 'https://gist.githubusercontent.com/legendmohe/ef2103c2e231bf3d926298e17ea8aa08/raw/b2a2343d512fc1f959ce77ea8f7ab1f055192f61/bintrayv1.gradle'
