@@ -26,4 +26,7 @@ dependencies {
     compile 'com.android.support:appcompat-v7:24.2.0'
     apt project(':packetparser-compiler')
     compile project(':packetparser-annotation')
+
+//    compile 'com.legendmohe.maven:packetparser-annonation:0.1'
+//    apt 'com.legendmohe.maven:packetparser-complier:0.1'
 }

@@ -25,11 +25,11 @@ ext {
     println("baseVersion:" + baseVersion + " | version:" + version)
 
     bintrayRepo = 'maven'
-    bintrayName = 'packetparser-annonation'
+    bintrayName = 'packetparser-annotation'
 
     publishedGroupId = 'com.legendmohe.maven'
-    libraryName = 'packetparser-annonation'
-    artifact = 'packetparser-annonation'
+    libraryName = 'packetparser-annotation'
+    artifact = 'packetparser-annotation'
 
     siteUrl = 'https://github.com/legendmohe/PacketParser'
     gitUrl = 'https://github.com/legendmohe/PacketParser.git'
