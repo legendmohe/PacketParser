@@ -215,7 +215,7 @@ public class PacketParserProcessor extends AbstractProcessor {
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
         parseMethod.addStatement("$T byteBuffer = $T.wrap(bytes)", readerClassName, readerClassName);
 
-        ClassName BufferOverflowExceptionClassName = ClassName.get("java.nio", "BufferOverflowException");
+        ClassName BufferOverflowExceptionClassName = ClassName.get("java.nio", "BufferUnderflowException");
         parseMethod.beginControlFlow("try");
 
         for (Pattern pattern :
