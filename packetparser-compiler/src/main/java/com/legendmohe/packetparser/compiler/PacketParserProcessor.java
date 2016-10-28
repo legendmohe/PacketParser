@@ -13,7 +13,6 @@ import com.squareup.javapoet.TypeSpec;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -185,7 +184,9 @@ public class PacketParserProcessor extends AbstractProcessor {
                     toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
                     break;
                 case ARRAY:
+                    toBytesMethod.beginControlFlow("if(src." + attr + " != null)");
                     toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
+                    toBytesMethod.endControlFlow();
                     break;
                 default:
                     processingEnv.getMessager().printMessage(
@@ -213,6 +214,9 @@ public class PacketParserProcessor extends AbstractProcessor {
 
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
         parseMethod.addStatement("$T byteBuffer = $T.wrap(bytes)", readerClassName, readerClassName);
+
+        ClassName BufferOverflowExceptionClassName = ClassName.get("java.nio", "BufferOverflowException");
+        parseMethod.beginControlFlow("try");
 
         for (Pattern pattern :
                 packetPattern) {
@@ -266,6 +270,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
         }
 
+        parseMethod.endControlFlow("catch ($T ignore) {}", BufferOverflowExceptionClassName);
         parseMethod.addStatement("return src");
         return parseMethod;
     }
