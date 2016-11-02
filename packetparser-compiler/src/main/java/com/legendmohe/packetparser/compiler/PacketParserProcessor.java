@@ -310,7 +310,9 @@ public class PacketParserProcessor extends AbstractProcessor {
                     break;
                 case ARRAY:
                     parseMethod.addStatement("src." + attr + " = new byte[" + exp + "]");
+                    parseMethod.beginControlFlow("if(src." + attr + ".length > 0)");
                     parseMethod.addStatement("byteBuffer.get(src." + attr + ")");
+                    parseMethod.endControlFlow();
                     break;
                 default:
                     processingEnv.getMessager().printMessage(
