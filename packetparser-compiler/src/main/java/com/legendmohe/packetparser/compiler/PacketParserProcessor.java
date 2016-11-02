@@ -141,7 +141,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
 
             // check attr & length expression
-            String[] temp = pattern.split(":");
+            String[] temp = pattern.split(":", 2);
             String attr = temp[0].trim();
             String exp = temp[1].trim();
             if (!fieldNameSet.containsKey(attr)) {
