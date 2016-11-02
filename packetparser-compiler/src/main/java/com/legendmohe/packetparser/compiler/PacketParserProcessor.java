@@ -107,21 +107,55 @@ public class PacketParserProcessor extends AbstractProcessor {
         String[] patterns = packetPattern.split("\\|");
         for (String pattern :
                 patterns) {
+
+            // check condition
+            String condition = null;
+            int lastConditionIdx = pattern.lastIndexOf("]");
+            if (lastConditionIdx != -1) {
+                if (pattern.charAt(0) != '[') {
+                    processingEnv.getMessager().printMessage(
+                            Diagnostic.Kind.ERROR,
+                            String.format("@%s-annotated class with invalid condition %s. (%s)",
+                                    ParsePacket.class.getSimpleName(),
+                                    pattern,
+                                    srcClass.asType().toString()
+                            )
+                    );
+                    return;
+                } else {
+                    condition = pattern.substring(1, lastConditionIdx);
+                    if (condition.length() == 0) {
+                        processingEnv.getMessager().printMessage(
+                                Diagnostic.Kind.ERROR,
+                                String.format("@%s-annotated class with empty condition %s. (%s)",
+                                        ParsePacket.class.getSimpleName(),
+                                        pattern,
+                                        srcClass.asType().toString()
+                                )
+                        );
+                        return;
+                    } else {
+                        pattern = pattern.substring(lastConditionIdx + 1);
+                    }
+                }
+            }
+
+            // check attr & length expression
             String[] temp = pattern.split(":");
-            String attr = temp[0];
-            String exp = temp[1];
+            String attr = temp[0].trim();
+            String exp = temp[1].trim();
             if (!fieldNameSet.containsKey(attr)) {
                 processingEnv.getMessager().printMessage(
                         Diagnostic.Kind.ERROR,
                         String.format("@%s-annotated class with miss pattern %s. (%s)",
                                 ParsePacket.class.getSimpleName(),
                                 attr,
-                                srcClass.getSimpleName()
+                                srcClass.asType().toString()
                         )
                 );
                 return;
             }
-            patternList.add(new Pattern(attr, exp));
+            patternList.add(new Pattern(condition, attr, exp));
         }
 
         MethodSpec.Builder parseMethod = MethodSpec.methodBuilder("parse")
@@ -155,6 +189,11 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
             dataLen.append(exp);
             dataLen.append(" + ");
+
+            String condition = pattern.condition;
+            if (condition != null && condition.length() > 0 && condition.contains("this.")) {
+                pattern.condition = condition.replace("this.", "src.");
+            }
         }
         if (dataLen.length() != 0) {
             dataLen.delete(dataLen.length() - 3, dataLen.length());
@@ -165,6 +204,10 @@ public class PacketParserProcessor extends AbstractProcessor {
 
         for (Pattern pattern :
                 packetPattern) {
+            boolean hasCondition = pattern.condition != null && pattern.condition.length() > 0;
+            if (hasCondition) {
+                toBytesMethod.beginControlFlow("if(" + pattern.condition + ")");
+            }
             String attr = pattern.attr;
             Element fieldElement = fieldNameSet.get(attr);
             switch (fieldElement.asType().getKind()) {
@@ -184,7 +227,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                     toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
                     break;
                 case ARRAY:
-                    toBytesMethod.beginControlFlow("if(src." + attr + " != null)");
+                    toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)");
                     toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
                     toBytesMethod.endControlFlow();
                     break;
@@ -194,10 +237,13 @@ public class PacketParserProcessor extends AbstractProcessor {
                             String.format("@%s-annotated class with unsupported field type %s. (%s)",
                                     ParsePacket.class.getSimpleName(),
                                     fieldElement.asType().getKind().toString(),
-                                    srcClass.getSimpleName()
+                                    srcClass.asType().toString()
                             )
                     );
                     return toBytesMethod;
+            }
+            if (hasCondition) {
+                toBytesMethod.endControlFlow();
             }
         }
 
@@ -220,6 +266,7 @@ public class PacketParserProcessor extends AbstractProcessor {
 
         for (Pattern pattern :
                 packetPattern) {
+            String condition = pattern.condition;
             String attr = pattern.attr;
             String exp = pattern.exp;
             if (!fieldNameSet.containsKey(attr)) {
@@ -228,7 +275,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                         String.format("@%s-annotated class with miss pattern %s. (%s)",
                                 ParsePacket.class.getSimpleName(),
                                 attr,
-                                srcClass.getSimpleName()
+                                srcClass.asType().toString()
                         )
                 );
                 return parseMethod;
@@ -236,6 +283,14 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
+            if (condition != null && condition.contains("this.")) {
+                condition = condition.replace("this.", "src.");
+            }
+            boolean hasCondition = pattern.condition != null && pattern.condition.length() > 0;
+            if (hasCondition) {
+                parseMethod.beginControlFlow("if(" + condition + ")");
+            }
+
             Element fieldElement = fieldNameSet.get(attr);
             switch (fieldElement.asType().getKind()) {
                 case BYTE:
@@ -263,10 +318,13 @@ public class PacketParserProcessor extends AbstractProcessor {
                             String.format("@%s-annotated class with unsupported field type %s. (%s)",
                                     ParsePacket.class.getSimpleName(),
                                     fieldElement.asType().getKind().toString(),
-                                    srcClass.getSimpleName()
+                                    srcClass.asType().toString()
                             )
                     );
                     return parseMethod;
+            }
+            if (hasCondition) {
+                parseMethod.endControlFlow();
             }
         }
 
@@ -299,10 +357,12 @@ public class PacketParserProcessor extends AbstractProcessor {
     }
 
     private static class Pattern {
+        public String condition;
         public String attr;
         public String exp;
 
-        public Pattern(String attr, String exp) {
+        public Pattern(String condition, String attr, String exp) {
+            this.condition = condition;
             this.attr = attr;
             this.exp = exp;
         }
