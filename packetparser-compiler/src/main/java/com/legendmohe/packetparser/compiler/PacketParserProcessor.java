@@ -180,27 +180,39 @@ public class PacketParserProcessor extends AbstractProcessor {
                 .addParameter(TypeName.get(srcClass.asType()), "src")
                 .returns(ArrayTypeName.of(TypeName.BYTE));
 
-        StringBuilder dataLen = new StringBuilder();
+        // calculate buffer len
+        toBytesMethod.addStatement("int bufferLen = 0");
+
+        // 1. collect unconditional pattern
+        StringBuffer unconditionalLen = new StringBuffer();
         for (Pattern pattern :
                 packetPattern) {
             String exp = pattern.exp;
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
-            dataLen.append(exp);
-            dataLen.append(" + ");
 
             String condition = pattern.condition;
             if (condition != null && condition.length() > 0 && condition.contains("this.")) {
                 pattern.condition = condition.replace("this.", "src.");
             }
+
+            if (pattern.condition == null || condition.length() == 0) {
+                unconditionalLen.append(exp);
+                unconditionalLen.append(" + ");
+            } else {
+                toBytesMethod.beginControlFlow("if(" + pattern.condition + ")");
+                toBytesMethod.addStatement("bufferLen += " + exp);
+                toBytesMethod.endControlFlow();
+            }
         }
-        if (dataLen.length() != 0) {
-            dataLen.delete(dataLen.length() - 3, dataLen.length());
+        if (unconditionalLen.length() != 0) {
+            unconditionalLen.delete(unconditionalLen.length() - 3, unconditionalLen.length());
+            toBytesMethod.addStatement("bufferLen += " + unconditionalLen.toString());
         }
 
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
-        toBytesMethod.addStatement("$T byteBuffer = $T.allocate(" + dataLen.toString() + ")", readerClassName, readerClassName);
+        toBytesMethod.addStatement("$T byteBuffer = $T.allocate(bufferLen)", readerClassName, readerClassName);
 
         for (Pattern pattern :
                 packetPattern) {
