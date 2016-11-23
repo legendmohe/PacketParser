@@ -191,6 +191,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
+            exp = "(" + exp + ")";
 
             String condition = pattern.condition;
             if (condition != null && condition.length() > 0 && condition.contains("this.")) {
@@ -295,6 +296,8 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
+            exp = "(" + exp + ")";
+
             if (condition != null && condition.contains("this.")) {
                 condition = condition.replace("this.", "src.");
             }
