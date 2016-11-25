@@ -191,7 +191,9 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
-            exp = "(" + exp + ")";
+            if (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")")) {
+                pattern.exp = "(" + exp + ")";
+            }
 
             String condition = pattern.condition;
             if (condition != null && condition.length() > 0 && condition.contains("this.")) {
@@ -199,11 +201,11 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
 
             if (pattern.condition == null || condition.length() == 0) {
-                unconditionalLen.append(exp);
+                unconditionalLen.append(pattern.exp);
                 unconditionalLen.append(" + ");
             } else {
                 toBytesMethod.beginControlFlow("if(" + pattern.condition + ")");
-                toBytesMethod.addStatement("bufferLen += " + exp);
+                toBytesMethod.addStatement("bufferLen += " + pattern.exp);
                 toBytesMethod.endControlFlow();
             }
         }
@@ -242,6 +244,8 @@ public class PacketParserProcessor extends AbstractProcessor {
                 case ARRAY:
                     toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)");
                     toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
+                    toBytesMethod.nextControlFlow("else");
+                    toBytesMethod.addStatement("byteBuffer.put(new byte[" + pattern.exp + "])");
                     toBytesMethod.endControlFlow();
                     break;
                 default:
@@ -296,7 +300,9 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
-            exp = "(" + exp + ")";
+            if (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")")) {
+                pattern.exp = "(" + exp + ")";
+            }
 
             if (condition != null && condition.contains("this.")) {
                 condition = condition.replace("this.", "src.");
