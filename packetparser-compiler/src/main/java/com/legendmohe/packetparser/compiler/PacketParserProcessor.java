@@ -149,7 +149,10 @@ public class PacketParserProcessor extends AbstractProcessor {
             // check attr & length expression
             String[] temp = pattern.split(":", 2);
             String attr = temp[0].trim();
-            String exp = temp[1].trim();
+            String exp = "";
+            if (temp.length > 1) {
+                exp = temp[1].trim();
+            }
             if (!fieldNameSet.containsKey(attr)) {
                 processingEnv.getMessager().printMessage(
                         Diagnostic.Kind.ERROR,
@@ -179,7 +182,76 @@ public class PacketParserProcessor extends AbstractProcessor {
         MethodSpec.Builder toBytesMethod = buildToBytesMethod(srcClass, patternList, fieldNameSet);
         classBuilder.addMethod(toBytesMethod.build());
 
+        MethodSpec.Builder parseLenMethod = buildParseLenMethod(srcClass, patternList, fieldNameSet);
+        classBuilder.addMethod(parseLenMethod.build());
+
         generateJavaFile(packageName, classBuilder.build());
+    }
+
+    private MethodSpec.Builder buildParseLenMethod(TypeElement srcClass, List<Pattern> patternList, Map<String, Element> fieldNameSet) {
+        MethodSpec.Builder parseLenMethod = MethodSpec.methodBuilder("parseLen")
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
+                .addParameter(TypeName.get(srcClass.asType()), "src")
+                .returns(TypeName.INT);
+
+        // calculate buffer len
+        parseLenMethod.addStatement("int bufferLen = 0");
+
+        // 1. collect unconditional pattern
+        StringBuffer unconditionalLen = new StringBuffer();
+        for (Pattern pattern :
+                patternList) {
+            String exp = pattern.exp;
+            if (exp.contains("this.")) {
+                exp = exp.replace("this.", "src.");
+            }
+            if (pattern.exp.length() != 0 && (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")"))) {
+                exp = "(" + exp + ")";
+            }
+
+            String condition = pattern.condition;
+            if (condition != null && condition.length() > 0 && condition.contains("this.")) {
+                condition = condition.replace("this.", "src.");
+            }
+
+            if (exp.length() == 0) {
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                if (fieldElement != null && fieldElement instanceof TypeElement) {
+                    TypeElement attrTypeElement = (TypeElement) fieldElement;
+                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
+//                        pattern.exp = CodeBlock.of("$T.parseLen()", attrParserName).toString();
+                    }
+                }
+            }
+
+            if (condition == null || condition.length() == 0) {
+                unconditionalLen.append(exp);
+                unconditionalLen.append(" + ");
+            } else {
+                parseLenMethod.beginControlFlow("if(" + condition + ")")
+                        .addStatement("bufferLen += " + exp)
+                        .endControlFlow();
+            }
+        }
+        if (unconditionalLen.length() != 0) {
+            unconditionalLen.delete(unconditionalLen.length() - 3, unconditionalLen.length());
+            parseLenMethod.addStatement("bufferLen += " + unconditionalLen.toString());
+        }
+
+        // 2. process enclosing element
+        Element parentElement = mTypeUtils.asElement(srcClass.getSuperclass());
+        if (parentElement != null && parentElement instanceof TypeElement) {
+            TypeElement parentTypeElement = (TypeElement) parentElement;
+            if (mPendingElement.containsKey(parentTypeElement.getQualifiedName())) {
+                ClassName parentParserName = ClassName.get(getPackageName(parentTypeElement), parentTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                parseLenMethod.addStatement("bufferLen += $T.parseLen(src)", parentParserName);
+            }
+        }
+
+        parseLenMethod.addStatement("return bufferLen");
+        return parseLenMethod;
     }
 
     private MethodSpec.Builder buildToBytesMethod(TypeElement srcClass, List<Pattern> packetPattern, Map<String, Element> fieldNameSet) {
@@ -189,17 +261,16 @@ public class PacketParserProcessor extends AbstractProcessor {
                 .returns(ArrayTypeName.of(TypeName.BYTE));
 
         // calculate buffer len
-        toBytesMethod.addStatement("int bufferLen = 0");
+        ClassName parseName = ClassName.get(getPackageName(srcClass), srcClass.getSimpleName() + PARSER_CLASS_SUFFIX);
+        toBytesMethod.addStatement("int bufferLen = $T.parseLen(src)", parseName);
 
-        // 1. collect unconditional pattern
-        StringBuffer unconditionalLen = new StringBuffer();
         for (Pattern pattern :
                 packetPattern) {
             String exp = pattern.exp;
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
-            if (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")")) {
+            if (pattern.exp.length() != 0 && (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")"))) {
                 pattern.exp = "(" + exp + ")";
             }
 
@@ -208,22 +279,22 @@ public class PacketParserProcessor extends AbstractProcessor {
                 pattern.condition = condition.replace("this.", "src.");
             }
 
-            if (pattern.condition == null || condition.length() == 0) {
-                unconditionalLen.append(pattern.exp);
-                unconditionalLen.append(" + ");
-            } else {
-                toBytesMethod.beginControlFlow("if(" + pattern.condition + ")")
-                        .addStatement("bufferLen += " + pattern.exp)
-                        .endControlFlow();
+            if (exp.length() == 0) {
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                if (fieldElement != null && fieldElement instanceof TypeElement) {
+                    TypeElement attrTypeElement = (TypeElement) fieldElement;
+                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                        pattern.exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
+//                        pattern.exp = CodeBlock.of("$T.parseLen()", attrParserName).toString();
+                    }
+                }
             }
         }
-        if (unconditionalLen.length() != 0) {
-            unconditionalLen.delete(unconditionalLen.length() - 3, unconditionalLen.length());
-            toBytesMethod.addStatement("bufferLen += " + unconditionalLen.toString());
-        }
 
-        // 2. process enclosing element
-        boolean processParent = false;
+        ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
+        toBytesMethod.addStatement("$T byteBuffer = $T.allocate(bufferLen)", readerClassName, readerClassName);
+
         Element parentElement = mTypeUtils.asElement(srcClass.getSuperclass());
         if (parentElement != null && parentElement instanceof TypeElement) {
             TypeElement parentTypeElement = (TypeElement) parentElement;
@@ -231,19 +302,9 @@ public class PacketParserProcessor extends AbstractProcessor {
                 ClassName parentParserName = ClassName.get(getPackageName(parentTypeElement), parentTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
                 toBytesMethod.addStatement("byte[] parentBytes = $T.toBytes(src)", parentParserName);
                 toBytesMethod.beginControlFlow("if (parentBytes != null)")
-                        .addStatement("bufferLen += parentBytes.length")
+                        .addStatement("byteBuffer.put(parentBytes)")
                         .endControlFlow();
-                processParent = true;
             }
-        }
-
-        ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
-        toBytesMethod.addStatement("$T byteBuffer = $T.allocate(bufferLen)", readerClassName, readerClassName);
-
-        if (processParent) {
-            toBytesMethod.beginControlFlow("if (parentBytes != null)")
-                    .addStatement("byteBuffer.put(parentBytes)")
-                    .endControlFlow();
         }
 
         // 3. process attributes
@@ -277,6 +338,21 @@ public class PacketParserProcessor extends AbstractProcessor {
                             .nextControlFlow("else")
                             .addStatement("byteBuffer.put(new byte[" + pattern.exp + "])")
                             .endControlFlow();
+                    break;
+                case DECLARED:
+                    Element tempElement = mTypeUtils.asElement(fieldElement.asType());
+                    if (tempElement instanceof TypeElement) {
+                        TypeElement attrTypeElement = (TypeElement) tempElement;
+                        if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                            ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+
+                            toBytesMethod.beginControlFlow("if(src." + attr + " != null)")
+                                    .addStatement("byteBuffer.put($T.toBytes(src." + attr + "))", attrParserName)
+                                    .nextControlFlow("else")
+                                    .addStatement("byteBuffer.put(new byte[" + pattern.exp + "])")
+                                    .endControlFlow();
+                        }
+                    }
                     break;
                 default:
                     processingEnv.getMessager().printMessage(
@@ -342,7 +418,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             if (exp.contains("this.")) {
                 exp = exp.replace("this.", "src.");
             }
-            if (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")")) {
+            if (pattern.exp.length() != 0 && (!pattern.exp.startsWith("(") || !pattern.exp.endsWith(")"))) {
                 pattern.exp = "(" + exp + ")";
             }
 
@@ -376,6 +452,18 @@ public class PacketParserProcessor extends AbstractProcessor {
                     parseMethod.beginControlFlow("if(src." + attr + ".length > 0)");
                     parseMethod.addStatement("byteBuffer.get(src." + attr + ")");
                     parseMethod.endControlFlow();
+                    break;
+                case DECLARED:
+                    Element tempElement = mTypeUtils.asElement(fieldElement.asType());
+                    if (tempElement instanceof TypeElement) {
+                        TypeElement attrTypeElement = (TypeElement) tempElement;
+                        if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                            ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                            parseMethod.addStatement("byte[] " + attr + "Bytes = new byte[$T.parseLen(src." + attr + ")]", attrParserName);
+                            parseMethod.addStatement("byteBuffer.get(" + attr + "Bytes)");
+                            parseMethod.addStatement("src." + attr + " = $T.parse(" + attr + "Bytes)", attrParserName);
+                        }
+                    }
                     break;
                 default:
                     processingEnv.getMessager().printMessage(
