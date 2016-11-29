@@ -6,7 +6,7 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
  * Created by legendmohe on 16/8/25.
  */
 @ParsePacket(
-        "[this.len > 2]seq:2|mac:6|data:this.len-6|check:1|tail:1|targetObject"
+        "[this.len > 2]seq:2|mac:6|data:this.len-6|check:1|tail:1"
 )
 public class ChildObject extends ParentObject {
     public short seq;
@@ -14,5 +14,4 @@ public class ChildObject extends ParentObject {
     public byte[] data;
     public byte check;
     public byte tail;
-    public TargetObject targetObject;
 }

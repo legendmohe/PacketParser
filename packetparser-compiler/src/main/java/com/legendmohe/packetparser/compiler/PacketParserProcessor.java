@@ -68,12 +68,16 @@ public class PacketParserProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        mPendingElement.clear();
         for (Element element : roundEnv.getElementsAnnotatedWith(ParsePacket.class)) {
             if (!SuperficialValidation.validateElement(element))
                 continue;
             if (!(element instanceof TypeElement))
                 continue;
-            mPendingElement.put(((TypeElement) element).getQualifiedName(), (TypeElement) element);
+            Name name = ((TypeElement) element).getQualifiedName();
+            if (!mPendingElement.containsKey(name)) {
+                mPendingElement.put(name, (TypeElement) element);
+            }
         }
         for (TypeElement element :
                 mPendingElement.values()) {
