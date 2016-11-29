@@ -27,6 +27,7 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -42,6 +43,7 @@ public class PacketParserProcessor extends AbstractProcessor {
     private Elements mElementUtils;
     private Types mTypeUtils;
     private Filer mFiler;
+    private Map<Name, TypeElement> mPendingElement = new HashMap<>();
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
@@ -71,7 +73,11 @@ public class PacketParserProcessor extends AbstractProcessor {
                 continue;
             if (!(element instanceof TypeElement))
                 continue;
-            elementToPacketParser((TypeElement) element);
+            mPendingElement.put(((TypeElement) element).getQualifiedName(), (TypeElement) element);
+        }
+        for (TypeElement element :
+                mPendingElement.values()) {
+            elementToPacketParser(element);
         }
         return true;
     }
@@ -162,7 +168,9 @@ public class PacketParserProcessor extends AbstractProcessor {
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
                 .addParameter(ArrayTypeName.of(TypeName.BYTE), "src")
                 .returns(TypeName.get(srcClass.asType()));
-        parseMethod.addStatement("return parse(src, new $T())", TypeName.get(srcClass.asType()));
+        parseMethod.addStatement("$T srcObject = new $T()", TypeName.get(srcClass.asType()), TypeName.get(srcClass.asType()));
+        parseMethod.addStatement("parse(src, srcObject)");
+        parseMethod.addStatement("return srcObject");
         classBuilder.addMethod(parseMethod.build());
 
         parseMethod = buildParseMethod(srcClass, patternList, fieldNameSet);
@@ -204,9 +212,9 @@ public class PacketParserProcessor extends AbstractProcessor {
                 unconditionalLen.append(pattern.exp);
                 unconditionalLen.append(" + ");
             } else {
-                toBytesMethod.beginControlFlow("if(" + pattern.condition + ")");
-                toBytesMethod.addStatement("bufferLen += " + pattern.exp);
-                toBytesMethod.endControlFlow();
+                toBytesMethod.beginControlFlow("if(" + pattern.condition + ")")
+                        .addStatement("bufferLen += " + pattern.exp)
+                        .endControlFlow();
             }
         }
         if (unconditionalLen.length() != 0) {
@@ -214,9 +222,31 @@ public class PacketParserProcessor extends AbstractProcessor {
             toBytesMethod.addStatement("bufferLen += " + unconditionalLen.toString());
         }
 
+        // 2. process enclosing element
+        boolean processParent = false;
+        Element parentElement = mTypeUtils.asElement(srcClass.getSuperclass());
+        if (parentElement != null && parentElement instanceof TypeElement) {
+            TypeElement parentTypeElement = (TypeElement) parentElement;
+            if (mPendingElement.containsKey(parentTypeElement.getQualifiedName())) {
+                ClassName parentParserName = ClassName.get(getPackageName(parentTypeElement), parentTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                toBytesMethod.addStatement("byte[] parentBytes = $T.toBytes(src)", parentParserName);
+                toBytesMethod.beginControlFlow("if (parentBytes != null)")
+                        .addStatement("bufferLen += parentBytes.length")
+                        .endControlFlow();
+                processParent = true;
+            }
+        }
+
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
         toBytesMethod.addStatement("$T byteBuffer = $T.allocate(bufferLen)", readerClassName, readerClassName);
 
+        if (processParent) {
+            toBytesMethod.beginControlFlow("if (parentBytes != null)")
+                    .addStatement("byteBuffer.put(parentBytes)")
+                    .endControlFlow();
+        }
+
+        // 3. process attributes
         for (Pattern pattern :
                 packetPattern) {
             boolean hasCondition = pattern.condition != null && pattern.condition.length() > 0;
@@ -242,11 +272,11 @@ public class PacketParserProcessor extends AbstractProcessor {
                     toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
                     break;
                 case ARRAY:
-                    toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)");
-                    toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
-                    toBytesMethod.nextControlFlow("else");
-                    toBytesMethod.addStatement("byteBuffer.put(new byte[" + pattern.exp + "])");
-                    toBytesMethod.endControlFlow();
+                    toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)")
+                            .addStatement("byteBuffer.put(src." + attr + ")")
+                            .nextControlFlow("else")
+                            .addStatement("byteBuffer.put(new byte[" + pattern.exp + "])")
+                            .endControlFlow();
                     break;
                 default:
                     processingEnv.getMessager().printMessage(
@@ -273,10 +303,22 @@ public class PacketParserProcessor extends AbstractProcessor {
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
                 .addParameter(ArrayTypeName.of(TypeName.BYTE), "bytes")
                 .addParameter(TypeName.get(srcClass.asType()), "src")
-                .returns(TypeName.get(srcClass.asType()));
+                .returns(TypeName.INT);
+
+        parseMethod.addStatement("int wrapStartPos = 0");
+
+        // 1. process enclosing element
+        Element parentElement = mTypeUtils.asElement(srcClass.getSuperclass());
+        if (parentElement != null && parentElement instanceof TypeElement) {
+            TypeElement parentTypeElement = (TypeElement) parentElement;
+            if (mPendingElement.containsKey(parentTypeElement.getQualifiedName())) {
+                ClassName parentParserName = ClassName.get(getPackageName(parentTypeElement), parentTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                parseMethod.addStatement("wrapStartPos = $T.parse(bytes, src)", parentParserName);
+            }
+        }
 
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
-        parseMethod.addStatement("$T byteBuffer = $T.wrap(bytes)", readerClassName, readerClassName);
+        parseMethod.addStatement("$T byteBuffer = $T.wrap(bytes, wrapStartPos, bytes.length - wrapStartPos)", readerClassName, readerClassName);
 
         ClassName BufferOverflowExceptionClassName = ClassName.get("java.nio", "BufferUnderflowException");
         parseMethod.beginControlFlow("try");
@@ -352,7 +394,7 @@ public class PacketParserProcessor extends AbstractProcessor {
         }
 
         parseMethod.endControlFlow("catch ($T ignore) {}", BufferOverflowExceptionClassName);
-        parseMethod.addStatement("return src");
+        parseMethod.addStatement("return byteBuffer.position()");
         return parseMethod;
     }
 
