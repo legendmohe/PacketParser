@@ -83,5 +83,5 @@
     apt 'com.legendmohe.maven:packetparser-complier:x.y'
     compile 'com.legendmohe.maven:packetparser-annonation:x.y'
     
-    [packetparser-annonation ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-complier/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-complier/_latestVersion)
-    [packetparser-complier ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-annonation/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-annonation/_latestVersion)
+[packetparser-annonation ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-complier/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-complier/_latestVersion)
+[packetparser-complier ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-annonation/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-annonation/_latestVersion)
