@@ -1,8 +1,6 @@
-# PacketParser
+这个工具通过自动生成解析类，实现了字节数组和对象之间的转换。
 
-convert bytes to object
-
-## define:
+# 使用@ParsePacket注解标注实体类:
 
     @ParsePacket(
             "header:1|cmd:2|len:2|seq:2|mac:6|data:this.len-6|check:1|tail:1"
@@ -18,7 +16,7 @@ convert bytes to object
         public byte tail;
     }
     
-## auto generate parser class
+# 框架自动生成解析类 <类名>PacketParser
 
     public class TargetObjectPacketParser {
         public static final TargetObject parse(byte[] src) {
@@ -54,7 +52,7 @@ convert bytes to object
         }
     }
     
-## usage:
+## 使用方法:
 
     String data = "AA11220008556677889911223344556677";
     byte[] bytes = hexToBytes(data);
@@ -65,5 +63,25 @@ convert bytes to object
 
 # gradle
 
-    compile 'com.legendmohe.maven:packetparser-annonation:0.1'
-    apt 'com.legendmohe.maven:packetparser-complier:0.1'
+    buildscript {
+        repositories {
+            jcenter()
+        }
+        dependencies {
+            ...
+            classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8' // add this
+            ...
+        }
+    }
+    
+    apply plugin: 'com.android.application'
+    apply plugin: 'com.neenbedankt.android-apt'
+
+    apt 'com.squareup:javapoet:1.8.0'
+    apt 'com.google.auto:auto-common:0.6'
+    apt 'com.google.auto.service:auto-service:1.0-rc2'
+    apt 'com.legendmohe.maven:packetparser-complier:x.y'
+    compile 'com.legendmohe.maven:packetparser-annonation:x.y'
+    
+    [packetparser-annonation ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-complier/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-complier/_latestVersion)
+    [packetparser-complier ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-annonation/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-annonation/_latestVersion)
