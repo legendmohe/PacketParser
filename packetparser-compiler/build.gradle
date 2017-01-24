@@ -25,7 +25,7 @@ ext {
     println("baseVersion:" + baseVersion + " | version:" + version)
 
     bintrayRepo = 'maven'
-    bintrayName = 'packetparser-complier'
+    bintrayName = 'packetparser-compiler'
 
     publishedGroupId = 'com.legendmohe.maven'
     libraryName = 'packetparser-compiler'
