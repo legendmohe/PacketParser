@@ -81,9 +81,8 @@
     apt 'com.google.auto:auto-common:0.6'
     apt 'com.google.auto.service:auto-service:1.0-rc2'
     apt 'com.legendmohe.maven:packetparser-complier:x.y'
-    compile 'com.legendmohe.maven:packetparser-annonation:x.y'
+    compile 'com.legendmohe.maven:packetparser-annotation:x.y'
 
-
-----
-[packetparser-annonation ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-complier/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-complier/_latestVersion)
-[packetparser-complier ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-annonation/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-annonation/_latestVersion)
+# version
+[packetparser-complier ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-complier/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-complier/_latestVersion)
+[packetparser-annotation ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-annotation/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-annotation/_latestVersion)
