@@ -80,7 +80,7 @@
     apt 'com.squareup:javapoet:1.8.0'
     apt 'com.google.auto:auto-common:0.6'
     apt 'com.google.auto.service:auto-service:1.0-rc2'
-    apt 'com.legendmohe.maven:packetparser-complier:x.y'
+    apt 'com.legendmohe.maven:packetparser-compiler:x.y'
     compile 'com.legendmohe.maven:packetparser-annotation:x.y'
 
 [packetparser-compiler ![Download](https://api.bintray.com/packages/legendmohe/maven/packetparser-compiler/images/download.svg) ](https://bintray.com/legendmohe/maven/packetparser-compiler/_latestVersion)  
