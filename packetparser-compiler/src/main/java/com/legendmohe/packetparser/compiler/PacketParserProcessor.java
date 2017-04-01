@@ -89,11 +89,11 @@ public class PacketParserProcessor extends AbstractProcessor {
     private void elementToPacketParser(TypeElement srcClass) {
         ParsePacket parsePacket = srcClass.getAnnotation(ParsePacket.class);
         String packetPattern = parsePacket.value();
-        if (packetPattern == null || packetPattern.length() == 0) {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, String.format("@%s-annotated class with empty pattern. (%s)",
-                    parsePacket.getClass().getSimpleName(), srcClass.getSimpleName()));
-            return;
-        }
+//        if (packetPattern == null || packetPattern.length() == 0) {
+//            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, String.format("@%s-annotated class with empty pattern. (%s)",
+//                    parsePacket.getClass().getSimpleName(), srcClass.getSimpleName()));
+//            return;
+//        }
 
         String packageName = getPackageName(srcClass);
 
