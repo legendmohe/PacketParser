@@ -55,4 +55,22 @@ public class ExampleUnitTest {
         byte[] toBytes = ChildObjectPacketParser.toBytes(childObject);
         assertArrayEquals(bytes, toBytes);
     }
+
+    @Test
+    public void addition_isCorrect3() throws Exception {
+        String data = "AA11220008556677889911223344556677";
+        byte[] bytes = hexToBytes(data);
+        ChildObject childObject = ChildObjectPacketParser.parse(bytes);
+        assertEquals((byte) 0xAA, childObject.header);
+        assertEquals(0x1122, childObject.cmd);
+        assertEquals(0x0008, childObject.len);
+        assertEquals(0x5566, childObject.seq);
+        assertArrayEquals(new byte[]{0x77, (byte) 0x88, (byte) 0x99, 0x11, 0x22, 0x33}, childObject.mac);
+        assertArrayEquals(new byte[]{0x44, 0x55}, childObject.data);
+        assertEquals(0x66, childObject.check);
+        assertEquals(0x77, childObject.tail);
+
+        byte[] toBytes = ChildObjectPacketParser.toBytes(childObject);
+        assertArrayEquals(bytes, toBytes);
+    }
 }

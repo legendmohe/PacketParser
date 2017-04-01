@@ -117,7 +117,9 @@ public class PacketParserProcessor extends AbstractProcessor {
         String[] patterns = packetPattern.split("\\|");
         for (String pattern :
                 patterns) {
-
+            if (pattern.length() == 0) {
+                continue;
+            }
             // check condition
             String condition = null;
             int lastConditionIdx = pattern.lastIndexOf("]");
