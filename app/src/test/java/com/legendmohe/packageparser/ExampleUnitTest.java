@@ -73,4 +73,20 @@ public class ExampleUnitTest {
         byte[] toBytes = ChildObjectPacketParser.toBytes(childObject);
         assertArrayEquals(bytes, toBytes);
     }
+
+    @Test
+    public void addition_isCorrect4() throws Exception {
+        String data = "0a0007BB00030101010c";
+        byte[] bytes = hexToBytes(data);
+        TLVHolderHeaderObject tlvHolderObject = TLVHolderHeaderObjectPacketParser.parse(bytes);
+        assertEquals((byte) 0x0A, tlvHolderObject.type);
+        assertEquals(0x0007, tlvHolderObject.length);
+        assertEquals((byte) 0xBB, tlvHolderObject.tlvObject.type);
+        assertEquals(0x0003, tlvHolderObject.tlvObject.length);
+        assertArrayEquals(new byte[]{0x01, 0x01, 0x01}, tlvHolderObject.tlvObject.value);
+        assertEquals((byte) 0x0c, tlvHolderObject.a);
+
+        byte[] toBytes = TLVHolderHeaderObjectPacketParser.toBytes(tlvHolderObject);
+        assertArrayEquals(bytes, toBytes);
+    }
 }

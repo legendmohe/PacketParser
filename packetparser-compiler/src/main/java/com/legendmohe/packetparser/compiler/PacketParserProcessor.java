@@ -465,9 +465,11 @@ public class PacketParserProcessor extends AbstractProcessor {
                         TypeElement attrTypeElement = (TypeElement) tempElement;
                         if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                             ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                            parseMethod.addStatement("byte[] " + attr + "Bytes = new byte[$T.parseLen(src." + attr + ")]", attrParserName);
-                            parseMethod.addStatement("byteBuffer.get(" + attr + "Bytes)");
+
+                            parseMethod.addStatement("byte[] " + attr + "Bytes = new byte[byteBuffer.remaining()]");
+                            parseMethod.addStatement("byteBuffer.slice().get(" + attr + "Bytes)");
                             parseMethod.addStatement("src." + attr + " = $T.parse(" + attr + "Bytes)", attrParserName);
+                            parseMethod.addStatement("byteBuffer.position(byteBuffer.position() + $T.parseLen(src." + attr + "))", attrParserName);
                         }
                     }
                     break;
