@@ -10,7 +10,7 @@ import java.util.List;
 @ParsePacket({
         "tlvObject",
         "2a:4",
-        "1b:1",
+        "1b",
         "c:4"
 })
 public class TLVHolderListObject extends TLVHeaderObject {

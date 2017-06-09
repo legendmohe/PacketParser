@@ -257,7 +257,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             String condition = pattern.getFormattedCondition();
             String exp = pattern.getFormattedExp();
 
-            if (!parseMethodAppendPattern(fieldNameSet, parseMethod, pattern, attr, condition, exp)) {
+            if (!parseMethodAddPattern(fieldNameSet, parseMethod, pattern, attr, condition, exp)) {
                 // error occurred
                 processingEnv.getMessager().printMessage(
                         Diagnostic.Kind.ERROR,
@@ -309,6 +309,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                 continue;
             }
 
+            String attr = pattern.attr;
             String exp = pattern.getFormattedExp();
             String condition = pattern.getFormattedCondition();
 
@@ -323,63 +324,16 @@ public class PacketParserProcessor extends AbstractProcessor {
                 }
             }
 
-            boolean hasCondition = condition != null && condition.length() > 0;
-            if (hasCondition) {
-                toBytesMethod.beginControlFlow("if(" + condition + ")");
-            }
-            String attr = pattern.attr;
-            Element fieldElement = fieldNameSet.get(attr);
-            switch (fieldElement.asType().getKind()) {
-                case BYTE:
-                    toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
-                    break;
-                case SHORT:
-                    toBytesMethod.addStatement("byteBuffer.putShort(src." + attr + ")");
-                    break;
-                case INT:
-                    toBytesMethod.addStatement("byteBuffer.putInt(src." + attr + ")");
-                    break;
-                case LONG:
-                    toBytesMethod.addStatement("byteBuffer.putLong(src." + attr + ")");
-                    break;
-                case CHAR:
-                    toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
-                    break;
-                case ARRAY:
-                    toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)")
-                            .addStatement("byteBuffer.put(src." + attr + ")")
-                            .nextControlFlow("else")
-                            .addStatement("byteBuffer.put(new byte[" + exp + "])")
-                            .endControlFlow();
-                    break;
-                case DECLARED:
-                    Element tempElement = mTypeUtils.asElement(fieldElement.asType());
-                    if (tempElement instanceof TypeElement) {
-                        TypeElement attrTypeElement = (TypeElement) tempElement;
-                        if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
-                            ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-
-                            toBytesMethod.beginControlFlow("if(src." + attr + " != null)")
-                                    .addStatement("byteBuffer.put($T.toBytes(src." + attr + "))", attrParserName)
-                                    .nextControlFlow("else")
-                                    .addStatement("byteBuffer.put(new byte[" + exp + "])")
-                                    .endControlFlow();
-                        }
-                    }
-                    break;
-                default:
-                    processingEnv.getMessager().printMessage(
-                            Diagnostic.Kind.ERROR,
-                            String.format("@%s-annotated class with unsupported field type %s. (%s)",
-                                    ParsePacket.class.getSimpleName(),
-                                    fieldElement.asType().getKind().toString(),
-                                    srcClass.asType().toString()
-                            )
-                    );
-                    return toBytesMethod;
-            }
-            if (hasCondition) {
-                toBytesMethod.endControlFlow();
+            if (!toBytesMethodAddPattern(fieldNameSet, toBytesMethod, pattern, attr, exp, condition)) {
+                processingEnv.getMessager().printMessage(
+                        Diagnostic.Kind.ERROR,
+                        String.format("@%s-annotated class with unsupported field type %s. (%s)",
+                                ParsePacket.class.getSimpleName(),
+                                fieldNameSet.get(attr).asType().getKind().toString(),
+                                srcClass.asType().toString()
+                        )
+                );
+                return toBytesMethod;
             }
         }
 
@@ -420,7 +374,29 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
 
             if (pattern.repeat > 0) {
-                exp = exp + "*" + pattern.repeat;
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                if (fieldElement != null && fieldElement instanceof TypeElement) {
+                    TypeMirror fieldType = fieldNameSet.get(pattern.attr).asType();
+                    fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
+                    Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
+                    if (simpleName.contentEquals("Integer")
+                            || simpleName.contentEquals("Byte")
+                            || simpleName.contentEquals("Short")
+                            || simpleName.contentEquals("Long")
+                            || simpleName.contentEquals("Character")
+                            || simpleName.contentEquals("byte[]")) {
+                        exp = exp + "*" + pattern.repeat;
+                    } else {
+                        parseLenMethod.beginControlFlow("for (int i = 0; i < $L; i++)", pattern.repeat);
+                        TypeElement attrTypeElement = (TypeElement) mTypeUtils.asElement(fieldType);
+                        if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                            ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                            parseLenMethod.addStatement("bufferLen += (src == null ? 0 : " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ".get(i)))");
+                        }
+                        parseLenMethod.endControlFlow();
+                        continue;
+                    }
+                }
             }
             if (condition == null || condition.length() == 0) {
                 unconditionalLen.append(exp);
@@ -464,7 +440,7 @@ public class PacketParserProcessor extends AbstractProcessor {
         }
     }
 
-    private boolean parseMethodAppendPattern(Map<String, Element> fieldNameSet, MethodSpec.Builder parseMethod, Pattern pattern, String attr, String condition, String exp) {
+    private boolean parseMethodAddPattern(Map<String, Element> fieldNameSet, MethodSpec.Builder parseMethod, Pattern pattern, String attr, String condition, String exp) {
         boolean hasCondition = condition != null && condition.length() > 0;
         if (hasCondition) {
             parseMethod.beginControlFlow("if(" + condition + ")");
@@ -544,6 +520,59 @@ public class PacketParserProcessor extends AbstractProcessor {
         // condition control flow
         if (hasCondition) {
             parseMethod.endControlFlow();
+        }
+        return true;
+    }
+
+    private boolean toBytesMethodAddPattern(Map<String, Element> fieldNameSet, MethodSpec.Builder toBytesMethod, Pattern pattern, String attr, String exp, String condition) {
+        boolean hasCondition = condition != null && condition.length() > 0;
+        if (hasCondition) {
+            toBytesMethod.beginControlFlow("if(" + condition + ")");
+        }
+        Element fieldElement = fieldNameSet.get(attr);
+        switch (fieldElement.asType().getKind()) {
+            case BYTE:
+                toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
+                break;
+            case SHORT:
+                toBytesMethod.addStatement("byteBuffer.putShort(src." + attr + ")");
+                break;
+            case INT:
+                toBytesMethod.addStatement("byteBuffer.putInt(src." + attr + ")");
+                break;
+            case LONG:
+                toBytesMethod.addStatement("byteBuffer.putLong(src." + attr + ")");
+                break;
+            case CHAR:
+                toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
+                break;
+            case ARRAY:
+                toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)")
+                        .addStatement("byteBuffer.put(src." + attr + ")")
+                        .nextControlFlow("else")
+                        .addStatement("byteBuffer.put(new byte[" + exp + "])")
+                        .endControlFlow();
+                break;
+            case DECLARED:
+                Element tempElement = mTypeUtils.asElement(fieldElement.asType());
+                if (tempElement instanceof TypeElement) {
+                    TypeElement attrTypeElement = (TypeElement) tempElement;
+                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+
+                        toBytesMethod.beginControlFlow("if(src." + attr + " != null)")
+                                .addStatement("byteBuffer.put($T.toBytes(src." + attr + "))", attrParserName)
+                                .nextControlFlow("else")
+                                .addStatement("byteBuffer.put(new byte[" + exp + "])")
+                                .endControlFlow();
+                    }
+                }
+                break;
+            default:
+                return false;
+        }
+        if (hasCondition) {
+            toBytesMethod.endControlFlow();
         }
         return true;
     }
