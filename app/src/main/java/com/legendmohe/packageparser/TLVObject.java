@@ -6,7 +6,11 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
  * Created by legendmohe on 2017/5/16.
  */
 
-@ParsePacket("type:1|length:2|value:this.length")
+@ParsePacket({
+        "type:1",
+        "length:2",
+        "value:this.length"
+})
 public class TLVObject {
     public byte type;
     public short length;
