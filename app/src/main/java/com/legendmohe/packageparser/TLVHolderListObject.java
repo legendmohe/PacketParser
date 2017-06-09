@@ -9,11 +9,13 @@ import java.util.List;
  */
 @ParsePacket({
         "tlvObject",
-        "a:4",
-        "b:1"
+        "2a:4",
+        "1b:1",
+        "c:4"
 })
 public class TLVHolderListObject extends TLVHeaderObject {
     public TLVObject tlvObject;
     public List<Integer> a;
     public List<TLVObject> b;
+    public int c;
 }

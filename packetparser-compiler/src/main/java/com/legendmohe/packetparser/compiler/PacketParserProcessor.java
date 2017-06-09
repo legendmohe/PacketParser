@@ -31,6 +31,9 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
@@ -42,7 +45,7 @@ import javax.tools.Diagnostic;
 public class PacketParserProcessor extends AbstractProcessor {
 
     private static final String PARSER_CLASS_SUFFIX = "PacketParser";
-    private static final Set<Character> gOptionChars = new HashSet<>(Arrays.asList('-'));
+    private static final Set<Character> gOptionChars = new HashSet<>(Arrays.asList('~'));
     private Elements mElementUtils;
     private Types mTypeUtils;
     private Filer mFiler;
@@ -111,9 +114,8 @@ public class PacketParserProcessor extends AbstractProcessor {
         }
 
         List<Pattern> patternList = new ArrayList<>();
-        String[] patterns = packetPatterns;
         for (String pattern :
-                patterns) {
+                packetPatterns) {
             if (pattern.length() == 0) {
                 continue;
             }
@@ -154,10 +156,15 @@ public class PacketParserProcessor extends AbstractProcessor {
             String attr = temp[0].trim();
             String option = "";
             String exp = "";
+            int repeat = 0;
 
             // parse option
             if (gOptionChars.contains(attr.charAt(0))) {
                 option = String.valueOf(attr.charAt(0));
+                attr = attr.substring(1);
+            }
+            if (Character.isDigit(attr.charAt(0))) {
+                repeat = Integer.valueOf(attr.substring(0, 1));
                 attr = attr.substring(1);
             }
 
@@ -175,7 +182,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                 );
                 return;
             }
-            patternList.add(new Pattern(condition, attr, exp, option));
+            patternList.add(new Pattern(condition, attr, exp, option, repeat));
         }
 
         MethodSpec.Builder parseMethod = MethodSpec.methodBuilder("parse")
@@ -248,65 +255,19 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
 
             String condition = pattern.getFormattedCondition();
-            boolean hasCondition = condition != null && condition.length() > 0;
-            if (hasCondition) {
-                parseMethod.beginControlFlow("if(" + condition + ")");
-            }
-
             String exp = pattern.getFormattedExp();
 
-            String byteBufferString = pattern.containsIgnoreOpt() ? "byteBuffer.slice()" : "byteBuffer";
-
-            Element fieldElement = fieldNameSet.get(attr);
-            switch (fieldElement.asType().getKind()) {
-                case BYTE:
-                    parseMethod.addStatement("src." + attr + " = " + byteBufferString + ".get()");
-                    break;
-                case SHORT:
-                    parseMethod.addStatement("src." + attr + " = " + byteBufferString + ".getShort()");
-                    break;
-                case INT:
-                    parseMethod.addStatement("src." + attr + " = " + byteBufferString + ".getInt()");
-                    break;
-                case LONG:
-                    parseMethod.addStatement("src." + attr + " = " + byteBufferString + ".getLong()");
-                    break;
-                case CHAR:
-                    parseMethod.addStatement("src." + attr + " = " + byteBufferString + ".getChar()");
-                    break;
-                case ARRAY:
-                    parseMethod.addStatement("src." + attr + " = new byte[" + exp + "]");
-                    parseMethod.beginControlFlow("if(src." + attr + ".length > 0)");
-                    parseMethod.addStatement(byteBufferString + ".get(src." + attr + ")");
-                    parseMethod.endControlFlow();
-                    break;
-                case DECLARED:
-                    Element tempElement = mTypeUtils.asElement(fieldElement.asType());
-                    if (tempElement instanceof TypeElement) {
-                        TypeElement attrTypeElement = (TypeElement) tempElement;
-                        if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
-                            ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-
-                            parseMethod.addStatement("byte[] " + attr + "Bytes = new byte[byteBuffer.remaining()]");
-                            parseMethod.addStatement("byteBuffer.slice().get(" + attr + "Bytes)");
-                            parseMethod.addStatement("src." + attr + " = $T.parse(" + attr + "Bytes)", attrParserName);
-                            parseMethod.addStatement(byteBufferString + ".position(byteBuffer.position() + $T.parseLen(src." + attr + "))", attrParserName);
-                        }
-                    }
-                    break;
-                default:
-                    processingEnv.getMessager().printMessage(
-                            Diagnostic.Kind.ERROR,
-                            String.format("@%s-annotated class with unsupported field type %s. (%s)",
-                                    ParsePacket.class.getSimpleName(),
-                                    fieldElement.asType().getKind().toString(),
-                                    srcClass.asType().toString()
-                            )
-                    );
-                    return parseMethod;
-            }
-            if (hasCondition) {
-                parseMethod.endControlFlow();
+            if (!parseMethodAppendPattern(fieldNameSet, parseMethod, pattern, attr, condition, exp)) {
+                // error occurred
+                processingEnv.getMessager().printMessage(
+                        Diagnostic.Kind.ERROR,
+                        String.format("@%s-annotated class with unsupported field type %s. (%s)",
+                                ParsePacket.class.getSimpleName(),
+                                fieldNameSet.get(attr).asType().getKind().toString(),
+                                srcClass.asType().toString()
+                        )
+                );
+                return parseMethod;
             }
         }
 
@@ -323,21 +284,6 @@ public class PacketParserProcessor extends AbstractProcessor {
         // calculate buffer len
         ClassName parseName = ClassName.get(getPackageName(srcClass), srcClass.getSimpleName() + PARSER_CLASS_SUFFIX);
         toBytesMethod.addStatement("int bufferLen = $T.parseLen(src)", parseName);
-
-        for (Pattern pattern :
-                packetPattern) {
-            if (pattern.exp.length() == 0) {
-                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
-                if (fieldElement != null && fieldElement instanceof TypeElement) {
-                    TypeElement attrTypeElement = (TypeElement) fieldElement;
-                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
-                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                        pattern.exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
-//                        pattern.exp = CodeBlock.of("$T.parseLen()", attrParserName).toString();
-                    }
-                }
-            }
-        }
 
         ClassName readerClassName = ClassName.get("java.nio", "ByteBuffer");
         toBytesMethod.addStatement("$T byteBuffer = $T.allocate(bufferLen)", readerClassName, readerClassName);
@@ -365,6 +311,17 @@ public class PacketParserProcessor extends AbstractProcessor {
 
             String exp = pattern.getFormattedExp();
             String condition = pattern.getFormattedCondition();
+
+            if (exp.length() == 0) {
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                if (fieldElement != null && fieldElement instanceof TypeElement) {
+                    TypeElement attrTypeElement = (TypeElement) fieldElement;
+                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
+                    }
+                }
+            }
 
             boolean hasCondition = condition != null && condition.length() > 0;
             if (hasCondition) {
@@ -457,12 +414,14 @@ public class PacketParserProcessor extends AbstractProcessor {
                     TypeElement attrTypeElement = (TypeElement) fieldElement;
                     if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                         ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
-//                        pattern.exp = CodeBlock.of("$T.parseLen()", attrParserName).toString();
+                        exp = "(src == null ? 0 : " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + "))";
                     }
                 }
             }
 
+            if (pattern.repeat > 0) {
+                exp = exp + "*" + pattern.repeat;
+            }
             if (condition == null || condition.length() == 0) {
                 unconditionalLen.append(exp);
                 unconditionalLen.append(" + ");
@@ -503,6 +462,90 @@ public class PacketParserProcessor extends AbstractProcessor {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private boolean parseMethodAppendPattern(Map<String, Element> fieldNameSet, MethodSpec.Builder parseMethod, Pattern pattern, String attr, String condition, String exp) {
+        boolean hasCondition = condition != null && condition.length() > 0;
+        if (hasCondition) {
+            parseMethod.beginControlFlow("if(" + condition + ")");
+        }
+
+        String byteBufferString = pattern.containsIgnoreOpt() ? "byteBuffer.slice()" : "byteBuffer";
+        String assignString = pattern.repeat > 0 ? ".add(" : " = ";
+        String encloseString = pattern.repeat > 0 ? ")" : "";
+        Element fieldElement = fieldNameSet.get(attr);
+        TypeMirror fieldType = fieldElement.asType();
+        TypeKind fieldKind = fieldType.getKind();
+
+        if (pattern.repeat > 0) {
+            parseMethod.addStatement("src." + attr + " = new $T<>()", ArrayList.class);
+            parseMethod.beginControlFlow("for (int i = 0; i < $L; i++)", pattern.repeat);
+            fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
+            Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
+            if (simpleName.contentEquals("Integer")) {
+                fieldKind = TypeKind.INT;
+            } else if (simpleName.contentEquals("Byte")) {
+                fieldKind = TypeKind.BYTE;
+            } else if (simpleName.contentEquals("Short")) {
+                fieldKind = TypeKind.SHORT;
+            } else if (simpleName.contentEquals("Long")) {
+                fieldKind = TypeKind.LONG;
+            } else if (simpleName.contentEquals("Character")) {
+                fieldKind = TypeKind.CHAR;
+            } else if (simpleName.contentEquals("byte[]")) {
+                fieldKind = TypeKind.ARRAY;
+            }
+        }
+        switch (fieldKind) {
+            case BYTE:
+                parseMethod.addStatement("src." + attr + assignString + byteBufferString + ".get()" + encloseString);
+                break;
+            case SHORT:
+                parseMethod.addStatement("src." + attr + assignString + byteBufferString + ".getShort()" + encloseString);
+                break;
+            case INT:
+                parseMethod.addStatement("src." + attr + assignString + byteBufferString + ".getInt()" + encloseString);
+                break;
+            case LONG:
+                parseMethod.addStatement("src." + attr + assignString + byteBufferString + ".getLong()" + encloseString);
+                break;
+            case CHAR:
+                parseMethod.addStatement("src." + attr + assignString + byteBufferString + ".getChar()" + encloseString);
+                break;
+            case ARRAY:
+                parseMethod.addStatement("byte[] " + attr + "Array = new byte[" + exp + "]");
+                parseMethod.beginControlFlow("if(" + attr + "Array.length > 0)");
+                parseMethod.addStatement(byteBufferString + ".get(" + attr + "Array)");
+                parseMethod.addStatement("src." + attr + assignString + attr + "Array" + encloseString);
+                parseMethod.endControlFlow();
+                break;
+            case DECLARED:
+                Element tempElement = mTypeUtils.asElement(fieldType);
+                if (tempElement instanceof TypeElement) {
+                    TypeElement attrTypeElement = (TypeElement) tempElement;
+                    if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
+                        ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
+
+                        parseMethod.addStatement("byte[] " + attr + "Bytes = new byte[byteBuffer.remaining()]");
+                        parseMethod.addStatement("byteBuffer.slice().get(" + attr + "Bytes)");
+                        parseMethod.addStatement("$T " + attr + "Object = $T.parse(" + attr + "Bytes)", ClassName.get(attrTypeElement), attrParserName);
+                        parseMethod.addStatement("src." + attr + assignString + attr + "Object" + encloseString);
+                        parseMethod.addStatement(byteBufferString + ".position(byteBuffer.position() + $T.parseLen(" + attr + "Object))", attrParserName);
+                    }
+                }
+                break;
+            default:
+                return false;
+        }
+        if (pattern.repeat > 0) {
+            parseMethod.endControlFlow();
+        }
+
+        // condition control flow
+        if (hasCondition) {
+            parseMethod.endControlFlow();
+        }
+        return true;
     }
 
 }

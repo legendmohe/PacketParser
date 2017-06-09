@@ -8,12 +8,14 @@ class Pattern {
     public String attr;
     public String exp;
     public String opt;
+    public int repeat;
 
-    public Pattern(String condition, String attr, String exp, String opt) {
+    public Pattern(String condition, String attr, String exp, String opt, int repeat) {
         this.condition = condition;
         this.attr = attr;
         this.exp = exp;
         this.opt = opt;
+        this.repeat = repeat;
     }
 
     public String getFormattedCondition() {
@@ -21,7 +23,7 @@ class Pattern {
             return "";
         }
         String formattedCondition = condition;
-        if (formattedCondition != null && formattedCondition.contains("this.")) {
+        if (formattedCondition.contains("this.")) {
             formattedCondition = formattedCondition.replace("this.", "src.");
         }
         return formattedCondition;
@@ -50,6 +52,6 @@ class Pattern {
     }
 
     public boolean containsIgnoreOpt() {
-        return opt != null && opt.contains("-");
+        return opt != null && opt.contains("~");
     }
 }

@@ -89,4 +89,29 @@ public class ExampleUnitTest {
         byte[] toBytes = TLVHolderHeaderObjectPacketParser.toBytes(tlvHolderObject);
         assertArrayEquals(bytes, toBytes);
     }
+
+    @Test
+    public void testParseListFields() throws Exception {
+        String data = "0a0012BB00030101010000000100000002BB000301010100000003";
+        byte[] bytes = hexToBytes(data);
+
+        TLVHolderListObject tlvHolderListObject = TLVHolderListObjectPacketParser.parse(bytes);
+        assertEquals((byte) 0x0A, tlvHolderListObject.type);
+        assertEquals(0x0012, tlvHolderListObject.length);
+        assertEquals((byte) 0xBB, tlvHolderListObject.tlvObject.type);
+        assertEquals(0x0003, tlvHolderListObject.tlvObject.length);
+        assertArrayEquals(new byte[]{0x01, 0x01, 0x01}, tlvHolderListObject.tlvObject.value);
+        assertEquals(Integer.valueOf(0x1), tlvHolderListObject.a.get(0));
+        assertEquals(Integer.valueOf(0x2), tlvHolderListObject.a.get(1));
+
+        TLVObject b = tlvHolderListObject.b.get(0);
+        assertEquals((byte) 0xBB, b.type);
+        assertEquals(0x0003, b.length);
+        assertArrayEquals(new byte[]{0x01, 0x01, 0x01}, b.value);
+
+        assertEquals(0x3, tlvHolderListObject.c);
+
+        byte[] toBytes = TLVHolderListObjectPacketParser.toBytes(tlvHolderListObject);
+        assertArrayEquals(bytes, toBytes);
+    }
 }

@@ -9,7 +9,7 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
 @ParsePacket({
         "type:1",
         "length:2",
-        "-value:this.length"
+        "~value:this.length"
 })
 public class TLVHeaderObject {
     public byte type;
