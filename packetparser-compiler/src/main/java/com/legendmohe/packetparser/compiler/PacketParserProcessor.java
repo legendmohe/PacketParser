@@ -218,7 +218,7 @@ public class PacketParserProcessor extends AbstractProcessor {
 
     private MethodSpec.Builder buildParseMethod(TypeElement srcClass, List<Pattern> packetPattern, Map<String, Element> fieldNameSet) {
         MethodSpec.Builder parseMethod = MethodSpec.methodBuilder("parse")
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .addException(Exception.class)
                 .addParameter(ArrayTypeName.of(TypeName.BYTE), "bytes")
                 .addParameter(TypeName.get(srcClass.asType()), "src")
@@ -277,9 +277,15 @@ public class PacketParserProcessor extends AbstractProcessor {
 
     private MethodSpec.Builder buildToBytesMethod(TypeElement srcClass, List<Pattern> packetPattern, Map<String, Element> fieldNameSet) {
         MethodSpec.Builder toBytesMethod = MethodSpec.methodBuilder("toBytes")
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .addException(Exception.class)
                 .addParameter(TypeName.get(srcClass.asType()), "src")
                 .returns(ArrayTypeName.of(TypeName.BYTE));
+
+        // return 0 if src is null
+        toBytesMethod.beginControlFlow("if (src == null)")
+                .addStatement("return null")
+                .endControlFlow();
 
         // calculate buffer len
         ClassName parseName = ClassName.get(getPackageName(srcClass), srcClass.getSimpleName() + PARSER_CLASS_SUFFIX);
@@ -343,15 +349,20 @@ public class PacketParserProcessor extends AbstractProcessor {
 
     private MethodSpec.Builder buildParseLenMethod(TypeElement srcClass, List<Pattern> patternList, Map<String, Element> fieldNameSet) {
         MethodSpec.Builder parseLenMethod = MethodSpec.methodBuilder("parseLen")
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC)
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .addParameter(TypeName.get(srcClass.asType()), "src")
                 .returns(TypeName.INT);
+
+        // return 0 if src is null
+        parseLenMethod.beginControlFlow("if (src == null)")
+                .addStatement("return 0")
+                .endControlFlow();
 
         // calculate buffer len
         parseLenMethod.addStatement("int bufferLen = 0");
 
         // 1. collect unconditional pattern
-        StringBuffer unconditionalLen = new StringBuffer();
+        StringBuilder unconditionalLen = new StringBuilder();
         for (Pattern pattern :
                 patternList) {
             // ignore opt
@@ -368,7 +379,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                     TypeElement attrTypeElement = (TypeElement) fieldElement;
                     if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                         ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                        exp = "(src == null ? 0 : " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + "))";
+                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
                     }
                 }
             }
@@ -391,13 +402,14 @@ public class PacketParserProcessor extends AbstractProcessor {
                         TypeElement attrTypeElement = (TypeElement) mTypeUtils.asElement(fieldType);
                         if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                             ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                            parseLenMethod.addStatement("bufferLen += (src == null ? 0 : " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ".get(i)))");
+                            parseLenMethod.addStatement("bufferLen += " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ".get(i))");
                         }
                         parseLenMethod.endControlFlow();
                         continue;
                     }
                 }
             }
+
             if (condition == null || condition.length() == 0) {
                 unconditionalLen.append(exp);
                 unconditionalLen.append(" + ");
@@ -529,47 +541,67 @@ public class PacketParserProcessor extends AbstractProcessor {
         if (hasCondition) {
             toBytesMethod.beginControlFlow("if(" + condition + ")");
         }
+
+        String attrString = "src." + attr + (pattern.repeat > 0 ? ".get(i)" : "");
         Element fieldElement = fieldNameSet.get(attr);
-        switch (fieldElement.asType().getKind()) {
+        TypeMirror fieldType = fieldElement.asType();
+        TypeKind fieldKind = fieldType.getKind();
+        if (pattern.repeat > 0) {
+            toBytesMethod.beginControlFlow("for (int i = 0; i < $L; i++)", pattern.repeat);
+            fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
+            Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
+            if (simpleName.contentEquals("Integer")) {
+                fieldKind = TypeKind.INT;
+            } else if (simpleName.contentEquals("Byte")) {
+                fieldKind = TypeKind.BYTE;
+            } else if (simpleName.contentEquals("Short")) {
+                fieldKind = TypeKind.SHORT;
+            } else if (simpleName.contentEquals("Long")) {
+                fieldKind = TypeKind.LONG;
+            } else if (simpleName.contentEquals("Character")) {
+                fieldKind = TypeKind.CHAR;
+            } else if (simpleName.contentEquals("byte[]")) {
+                fieldKind = TypeKind.ARRAY;
+            }
+        }
+        switch (fieldKind) {
             case BYTE:
-                toBytesMethod.addStatement("byteBuffer.put(src." + attr + ")");
+                toBytesMethod.addStatement("byteBuffer.put(" + attrString + ")");
                 break;
             case SHORT:
-                toBytesMethod.addStatement("byteBuffer.putShort(src." + attr + ")");
+                toBytesMethod.addStatement("byteBuffer.putShort(" + attrString + ")");
                 break;
             case INT:
-                toBytesMethod.addStatement("byteBuffer.putInt(src." + attr + ")");
+                toBytesMethod.addStatement("byteBuffer.putInt(" + attrString + ")");
                 break;
             case LONG:
-                toBytesMethod.addStatement("byteBuffer.putLong(src." + attr + ")");
+                toBytesMethod.addStatement("byteBuffer.putLong(" + attrString + ")");
                 break;
             case CHAR:
-                toBytesMethod.addStatement("byteBuffer.putChar(src." + attr + ")");
+                toBytesMethod.addStatement("byteBuffer.putChar(" + attrString + ")");
                 break;
             case ARRAY:
-                toBytesMethod.beginControlFlow("if(src." + attr + " != null && src." + attr + ".length != 0)")
-                        .addStatement("byteBuffer.put(src." + attr + ")")
+                toBytesMethod.beginControlFlow("if(" + attrString + " != null && " + attrString + ".length != 0)")
+                        .addStatement("byteBuffer.put(" + attrString + ")")
                         .nextControlFlow("else")
                         .addStatement("byteBuffer.put(new byte[" + exp + "])")
                         .endControlFlow();
                 break;
             case DECLARED:
-                Element tempElement = mTypeUtils.asElement(fieldElement.asType());
+                Element tempElement = mTypeUtils.asElement(fieldType);
                 if (tempElement instanceof TypeElement) {
                     TypeElement attrTypeElement = (TypeElement) tempElement;
                     if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                         ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-
-                        toBytesMethod.beginControlFlow("if(src." + attr + " != null)")
-                                .addStatement("byteBuffer.put($T.toBytes(src." + attr + "))", attrParserName)
-                                .nextControlFlow("else")
-                                .addStatement("byteBuffer.put(new byte[" + exp + "])")
-                                .endControlFlow();
+                        toBytesMethod.addStatement("byteBuffer.put($T.toBytes(" + attrString + "))", attrParserName);
                     }
                 }
                 break;
             default:
                 return false;
+        }
+        if (pattern.repeat > 0) {
+            toBytesMethod.endControlFlow();
         }
         if (hasCondition) {
             toBytesMethod.endControlFlow();
