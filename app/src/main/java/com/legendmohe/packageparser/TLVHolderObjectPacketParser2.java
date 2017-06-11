@@ -57,7 +57,7 @@ public class TLVHolderObjectPacketParser2 {
             byteBuffer.put(new byte[TLVObjectPacketParser.parseLen(src.tlvObject)]);
         }
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 2 && byteBuffer.hasRemaining(); i++) {
             byteBuffer.putInt(src.a.get(i));
         }
 
@@ -66,6 +66,7 @@ public class TLVHolderObjectPacketParser2 {
         }
 
         byteBuffer.putInt(src.c);
+
         return byteBuffer.array();
     }
 

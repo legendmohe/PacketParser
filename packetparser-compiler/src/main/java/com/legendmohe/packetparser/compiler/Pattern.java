@@ -47,6 +47,10 @@ class Pattern {
         return formattedExp;
     }
 
+    public int getRepeatCount() {
+        return repeat;
+    }
+
     public String getOpt() {
         return opt;
     }
