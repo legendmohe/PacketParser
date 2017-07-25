@@ -159,7 +159,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             int repeat = 0;
 
             // parse option
-            if (gOptionChars.contains(attr.charAt(0))) {
+            if (attr.length() != 0 && gOptionChars.contains(attr.charAt(0))) {
                 option = String.valueOf(attr.charAt(0));
                 attr = attr.substring(1);
             }

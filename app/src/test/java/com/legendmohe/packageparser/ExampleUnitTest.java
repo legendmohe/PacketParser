@@ -11,6 +11,31 @@ import static org.junit.Assert.assertEquals;
 public class ExampleUnitTest {
 
     @Test
+    public void testEmptyObject() throws Exception {
+        String data = "";
+        byte[] bytes = hexToBytes(data);
+        EmptyObject emptyObject = EmptyObjectPacketParser.parse(bytes);
+        assert emptyObject != null;
+
+        byte[] toBytes = EmptyObjectPacketParser.toBytes(emptyObject);
+        assertArrayEquals(bytes, toBytes);
+    }
+
+    @Test
+    public void testEmptyInheritance() throws Exception {
+        String data = "aa00010002";
+        byte[] bytes = hexToBytes(data);
+        EmptyChildObject emptyObject = EmptyChildObjectPacketParser.parse(bytes);
+
+        assertEquals(0xaa, emptyObject.header & 0xff);
+        assertEquals(0x0001, emptyObject.cmd & 0xffff);
+        assertEquals(0x0002, emptyObject.len & 0xffff);
+
+        byte[] toBytes = EmptyChildObjectPacketParser.toBytes(emptyObject);
+        assertArrayEquals(bytes, toBytes);
+    }
+
+    @Test
     public void addition_isCorrect() throws Exception {
         String data = "AA11220008556677889911223344556677";
         byte[] bytes = hexToBytes(data);
