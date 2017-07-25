@@ -6,6 +6,6 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
  * Created by legendmohe on 2017/7/25.
  */
 
-@ParsePacket()
+@ParsePacket({})
 public class EmptyObject {
 }

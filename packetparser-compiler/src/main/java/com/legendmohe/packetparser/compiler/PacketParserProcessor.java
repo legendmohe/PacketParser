@@ -164,12 +164,12 @@ public class PacketParserProcessor extends AbstractProcessor {
                 attr = attr.substring(1);
             }
             // parse list count
-            if (Character.isDigit(attr.charAt(0))) {
+            if (attr.length() != 0 && Character.isDigit(attr.charAt(0))) {
                 repeat = Integer.parseInt(attr.substring(0, 1));
                 attr = attr.substring(1);
             }
             // parse list count
-            if (attr.charAt(0) == '*') {
+            if (attr.length() != 0 && attr.charAt(0) == '*') {
                 repeat = Integer.MAX_VALUE;
                 attr = attr.substring(1);
             }

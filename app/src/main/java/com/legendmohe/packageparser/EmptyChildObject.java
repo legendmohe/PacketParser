@@ -5,6 +5,6 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
 /**
  * Created by legendmohe on 16/8/25.
  */
-@ParsePacket()
+@ParsePacket({})
 public class EmptyChildObject extends ParentObject {
 }
