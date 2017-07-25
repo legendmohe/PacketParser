@@ -9,7 +9,7 @@ import com.legendmohe.packetparser.annotation.ParsePacket;
 @ParsePacket({
         "type:1",
         "length:2",
-        "~value:this.length"
+        "~value:this.length" // ~表示解析该字段但不会移动buffer的cursor
 })
 public class TLVHeaderObject {
     public byte type;

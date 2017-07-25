@@ -95,19 +95,26 @@ public class ExampleUnitTest {
         String data = "0a000fBB0003010101000000030000000100000002BB0003010100BB000101BB00020101";
         byte[] bytes = hexToBytes(data);
 
+        // 使用生成的TLVHolderListObjectPacketParser解析字节数组
         TLVHolderListObject tlvHolderListObject = TLVHolderListObjectPacketParser.parse(bytes);
+
+        // 检查TLV头部，即继承TLVHeaderObject的部分
         assertEquals((byte) 0x0A, tlvHolderListObject.type);
         assertEquals(0x000f, tlvHolderListObject.length);
 
+        // 检查对象作为字段
         assertEquals((byte) 0xBB, tlvHolderListObject.tlvObject.type);
         assertEquals(0x0003, tlvHolderListObject.tlvObject.length);
         assertArrayEquals(new byte[]{0x01, 0x01, 0x01}, tlvHolderListObject.tlvObject.value);
 
+        // 检查普通字段
         assertEquals(0x3, tlvHolderListObject.c);
 
+        // 检查列表字段
         assertEquals(Integer.valueOf(0x1), tlvHolderListObject.a.get(0));
         assertEquals(Integer.valueOf(0x2), tlvHolderListObject.a.get(1));
 
+        // 依次检查列表对象
         assertEquals(3, tlvHolderListObject.b.size());
 
         TLVObject b0 = tlvHolderListObject.b.get(0);
@@ -125,6 +132,7 @@ public class ExampleUnitTest {
         assertEquals(0x0002, b2.length);
         assertArrayEquals(new byte[]{0x01, 0x01}, b2.value);
 
+        // 检查对象转字节数组
         byte[] toBytes = TLVHolderListObjectPacketParser.toBytes(tlvHolderListObject);
         assertArrayEquals(bytes, toBytes);
     }
