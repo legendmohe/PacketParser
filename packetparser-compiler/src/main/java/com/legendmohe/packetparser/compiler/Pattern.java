@@ -4,13 +4,13 @@ package com.legendmohe.packetparser.compiler;
  * Created by legendmohe on 2017/6/9.
  */
 class Pattern {
-    public String condition;
-    public String attr;
-    public String exp;
-    public String opt;
-    public int repeat;
+    private String condition;
+    private String attr;
+    private String exp;
+    private String opt;
+    private String repeat;
 
-    public Pattern(String condition, String attr, String exp, String opt, int repeat) {
+    public Pattern(String condition, String attr, String exp, String opt, String repeat) {
         this.condition = condition;
         this.attr = attr;
         this.exp = exp;
@@ -47,8 +47,22 @@ class Pattern {
         return formattedExp;
     }
 
-    public int getRepeatCount() {
+    public String getRepeat() {
         return repeat;
+    }
+
+    public String getFormattedRepeat() {
+        if (repeat == null || repeat.length() == 0) {
+            return "0";
+        }
+        if (repeat == "*") {
+            return String.valueOf(Integer.MAX_VALUE);
+        }
+        return "(" + repeat.replace("this", "src") + ")";
+    }
+
+    public boolean hasSetRepeat() {
+        return repeat != null && repeat.length() != 0;
     }
 
     public String getOpt() {

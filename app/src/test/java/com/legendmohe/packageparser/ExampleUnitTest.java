@@ -2,6 +2,8 @@ package com.legendmohe.packageparser;
 
 import org.junit.Test;
 
+import java.nio.BufferUnderflowException;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
@@ -36,7 +38,31 @@ public class ExampleUnitTest {
     }
 
     @Test
-    public void addition_isCorrect() throws Exception {
+    public void testParseBufferUnderflow() throws Exception {
+        String data = "aa0001";
+        byte[] bytes = hexToBytes(data);
+        ParentObject emptyObject = null;
+        try {
+            emptyObject = ParentObjectPacketParser.parse(bytes);
+        } catch (Exception e) {
+            assertEquals(BufferUnderflowException.class, e.getClass());
+        }
+    }
+
+    @Test
+    public void testToBytesWithEmptyAttribute() throws Exception {
+        String data = "aa00010000";
+        byte[] bytes = hexToBytes(data);
+        ParentObject emptyObject = new ParentObject();
+        emptyObject.header = (byte) 0xaa;
+        emptyObject.cmd = 0x0001;
+
+        byte[] toBytes = ParentObjectPacketParser.toBytes(emptyObject);
+        assertArrayEquals(bytes, toBytes);
+    }
+
+    @Test
+    public void baseTest1() throws Exception {
         String data = "AA11220008556677889911223344556677";
         byte[] bytes = hexToBytes(data);
         TargetObject targetObject = TargetObjectPacketParser.parse(bytes);
@@ -64,7 +90,7 @@ public class ExampleUnitTest {
     }
 
     @Test
-    public void addition_isCorrect2() throws Exception {
+    public void baseTest2() throws Exception {
         String data = "AA11220008556677889911223344556677";
         byte[] bytes = hexToBytes(data);
         ChildObject childObject = ChildObjectPacketParser.parse(bytes);
@@ -82,7 +108,7 @@ public class ExampleUnitTest {
     }
 
     @Test
-    public void addition_isCorrect3() throws Exception {
+    public void baseTest3() throws Exception {
         String data = "AA11220008556677889911223344556677";
         byte[] bytes = hexToBytes(data);
         ChildObject childObject = ChildObjectPacketParser.parse(bytes);
@@ -100,7 +126,7 @@ public class ExampleUnitTest {
     }
 
     @Test
-    public void addition_isCorrect4() throws Exception {
+    public void baseTest4() throws Exception {
         String data = "0a0007BB00030101010c";
         byte[] bytes = hexToBytes(data);
         TLVHolderHeaderObject tlvHolderObject = TLVHolderHeaderObjectPacketParser.parse(bytes);
@@ -117,7 +143,7 @@ public class ExampleUnitTest {
 
     @Test
     public void testParseListFields() throws Exception {
-        String data = "0a000fBB0003010101000000030000000100000002BB0003010100BB000101BB00020101";
+        String data = "0a0010BB000301010100000003020000000100000002BB0003010100BB000101BB00020101";
         byte[] bytes = hexToBytes(data);
 
         // 使用生成的TLVHolderListObjectPacketParser解析字节数组
@@ -125,7 +151,7 @@ public class ExampleUnitTest {
 
         // 检查TLV头部，即继承TLVHeaderObject的部分
         assertEquals((byte) 0x0A, tlvHolderListObject.type);
-        assertEquals(0x000f, tlvHolderListObject.length);
+        assertEquals(0x0010, tlvHolderListObject.length);
 
         // 检查对象作为字段
         assertEquals((byte) 0xBB, tlvHolderListObject.tlvObject.type);
@@ -136,6 +162,7 @@ public class ExampleUnitTest {
         assertEquals(0x3, tlvHolderListObject.c);
 
         // 检查列表字段
+        assertEquals(0x02, tlvHolderListObject.aLen);
         assertEquals(Integer.valueOf(0x1), tlvHolderListObject.a.get(0));
         assertEquals(Integer.valueOf(0x2), tlvHolderListObject.a.get(1));
 
@@ -164,12 +191,12 @@ public class ExampleUnitTest {
 
     @Test
     public void testParseListFields2() throws Exception {
-        String data = "0a0012BB0003010101000000010000000100000002";
+        String data = "0a0013BB000301010100000001020000000100000002";
         byte[] bytes = hexToBytes(data);
 
         TLVHolderListObject tlvHolderListObject = TLVHolderListObjectPacketParser.parse(bytes);
         assertEquals((byte) 0x0A, tlvHolderListObject.type);
-        assertEquals(0x0012, tlvHolderListObject.length);
+        assertEquals(0x0013, tlvHolderListObject.length);
 
         assertEquals((byte) 0xBB, tlvHolderListObject.tlvObject.type);
         assertEquals(0x0003, tlvHolderListObject.tlvObject.length);
@@ -178,10 +205,37 @@ public class ExampleUnitTest {
         // don't parse b
         assertEquals(0x1, tlvHolderListObject.c);
 
+        assertEquals(0x02, tlvHolderListObject.aLen);
         assertEquals(Integer.valueOf(0x1), tlvHolderListObject.a.get(0));
         assertEquals(Integer.valueOf(0x2), tlvHolderListObject.a.get(1));
 
         assertEquals(null, tlvHolderListObject.b);
+
+        byte[] toBytes = TLVHolderListObjectPacketParser.toBytes(tlvHolderListObject);
+        assertArrayEquals(bytes, toBytes);
+    }
+
+    @Test
+    public void testEmptyListAttribute() throws Exception {
+        String data = "0a0013BB000301010100000004020000000100000002";
+        byte[] bytes = hexToBytes(data);
+
+        TLVHolderListObject tlvHolderListObject = TLVHolderListObjectPacketParser.parse(bytes);
+        assertEquals((byte) 0x0A, tlvHolderListObject.type);
+        assertEquals(0x0013, tlvHolderListObject.length);
+
+        assertEquals((byte) 0xBB, tlvHolderListObject.tlvObject.type);
+        assertEquals(0x0003, tlvHolderListObject.tlvObject.length);
+        assertArrayEquals(new byte[]{0x01, 0x01, 0x01}, tlvHolderListObject.tlvObject.value);
+
+        assertEquals(0x4, tlvHolderListObject.c);
+
+        assertEquals(0x02, tlvHolderListObject.aLen);
+        assertEquals(Integer.valueOf(0x1), tlvHolderListObject.a.get(0));
+        assertEquals(Integer.valueOf(0x2), tlvHolderListObject.a.get(1));
+
+        // b is not null but an empty list
+        assertEquals(0, tlvHolderListObject.b.size());
 
         byte[] toBytes = TLVHolderListObjectPacketParser.toBytes(tlvHolderListObject);
         assertArrayEquals(bytes, toBytes);

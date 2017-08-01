@@ -156,7 +156,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             String attr = temp[0].trim();
             String option = "";
             String exp = "";
-            int repeat = 0;
+            String repeat = "";
 
             // parse option
             if (attr.length() != 0 && gOptionChars.contains(attr.charAt(0))) {
@@ -165,12 +165,17 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
             // parse list count
             if (attr.length() != 0 && Character.isDigit(attr.charAt(0))) {
-                repeat = Integer.parseInt(attr.substring(0, 1));
+                repeat = attr.substring(0, 1);
                 attr = attr.substring(1);
             }
             // parse list count
+            if (attr.length() != 0 && attr.charAt(0) == '(') {
+                repeat = attr.substring(1, attr.indexOf(')'));
+                attr = attr.substring(attr.indexOf(')') + 1);
+            }
+            // parse list count
             if (attr.length() != 0 && attr.charAt(0) == '*') {
-                repeat = Integer.MAX_VALUE;
+                repeat = "*";
                 attr = attr.substring(1);
             }
 
@@ -247,7 +252,7 @@ public class PacketParserProcessor extends AbstractProcessor {
 
         for (Pattern pattern :
                 packetPattern) {
-            String attr = pattern.attr;
+            String attr = pattern.getAttr();
             if (!fieldNameSet.containsKey(attr)) {
                 processingEnv.getMessager().printMessage(
                         Diagnostic.Kind.ERROR,
@@ -321,17 +326,17 @@ public class PacketParserProcessor extends AbstractProcessor {
                 continue;
             }
 
-            String attr = pattern.attr;
+            String attr = pattern.getAttr();
             String exp = pattern.getFormattedExp();
             String condition = pattern.getFormattedCondition();
 
             if (exp.length() == 0) {
-                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.getAttr()).asType());
                 if (fieldElement != null && fieldElement instanceof TypeElement) {
                     TypeElement attrTypeElement = (TypeElement) fieldElement;
                     if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                         ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
+                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.getAttr() + ")";
                     }
                 }
             }
@@ -385,20 +390,20 @@ public class PacketParserProcessor extends AbstractProcessor {
             }
 
             if (exp.length() == 0) {
-                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.getAttr()).asType());
                 if (fieldElement != null && fieldElement instanceof TypeElement) {
                     TypeElement attrTypeElement = (TypeElement) fieldElement;
                     if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                         ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ")";
+                        exp = attrParserName.simpleName() + ".parseLen(src." + pattern.getAttr() + ")";
                     }
                 }
             }
 
-            if (pattern.getRepeatCount() > 0) {
-                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.attr).asType());
+            if (pattern.hasSetRepeat()) {
+                Element fieldElement = mTypeUtils.asElement(fieldNameSet.get(pattern.getAttr()).asType());
                 if (fieldElement != null && fieldElement instanceof TypeElement) {
-                    TypeMirror fieldType = fieldNameSet.get(pattern.attr).asType();
+                    TypeMirror fieldType = fieldNameSet.get(pattern.getAttr()).asType();
                     fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
                     Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
                     if (simpleName.contentEquals("Integer")
@@ -407,13 +412,13 @@ public class PacketParserProcessor extends AbstractProcessor {
                             || simpleName.contentEquals("Long")
                             || simpleName.contentEquals("Character")
                             || simpleName.contentEquals("byte[]")) {
-                        exp = exp + "*" + pattern.repeat;
+                        exp = exp + "*" + pattern.getFormattedRepeat();
                     } else {
-                        parseLenMethod.beginControlFlow("for (int i = 0; i < $L && i < src." + pattern.attr + ".size(); i++)", pattern.repeat);
+                        parseLenMethod.beginControlFlow("for (int i = 0; i < $L && i < src." + pattern.getAttr() + ".size(); i++)", pattern.getFormattedRepeat());
                         TypeElement attrTypeElement = (TypeElement) mTypeUtils.asElement(fieldType);
                         if (mPendingElement.containsKey(attrTypeElement.getQualifiedName())) {
                             ClassName attrParserName = ClassName.get(getPackageName(attrTypeElement), attrTypeElement.getSimpleName() + PARSER_CLASS_SUFFIX);
-                            parseLenMethod.addStatement("bufferLen += " + attrParserName.simpleName() + ".parseLen(src." + pattern.attr + ".get(i))");
+                            parseLenMethod.addStatement("bufferLen += " + attrParserName.simpleName() + ".parseLen(src." + pattern.getAttr() + ".get(i))");
                         }
                         parseLenMethod.endControlFlow();
 
@@ -480,15 +485,15 @@ public class PacketParserProcessor extends AbstractProcessor {
         }
 
         String byteBufferString = pattern.containsIgnoreOpt() ? "byteBuffer.slice()" : "byteBuffer";
-        String assignString = pattern.getRepeatCount() > 0 ? ".add(" : " = ";
-        String encloseString = pattern.getRepeatCount() > 0 ? ")" : "";
+        String assignString = pattern.hasSetRepeat() ? ".add(" : " = ";
+        String encloseString = pattern.hasSetRepeat() ? ")" : "";
         Element fieldElement = fieldNameSet.get(attr);
         TypeMirror fieldType = fieldElement.asType();
         TypeKind fieldKind = fieldType.getKind();
 
-        if (pattern.getRepeatCount() > 0) {
+        if (pattern.hasSetRepeat()) {
             parseMethod.addStatement("src." + attr + " = new $T<>()", ArrayList.class);
-            parseMethod.beginControlFlow("for (int i = 0; i < $L && byteBuffer.hasRemaining(); i++)", pattern.repeat);
+            parseMethod.beginControlFlow("for (int i = 0; i < $L && byteBuffer.hasRemaining(); i++)", pattern.getFormattedRepeat());
             fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
             Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
             if (simpleName.contentEquals("Integer")) {
@@ -546,7 +551,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             default:
                 return false;
         }
-        if (pattern.getRepeatCount() > 0) {
+        if (pattern.hasSetRepeat()) {
             parseMethod.endControlFlow();
         }
 
@@ -563,12 +568,12 @@ public class PacketParserProcessor extends AbstractProcessor {
             toBytesMethod.beginControlFlow("if(" + condition + ")");
         }
 
-        String attrString = "src." + attr + (pattern.getRepeatCount() > 0 ? ".get(i)" : "");
+        String attrString = "src." + attr + (pattern.hasSetRepeat() ? ".get(i)" : "");
         Element fieldElement = fieldNameSet.get(attr);
         TypeMirror fieldType = fieldElement.asType();
         TypeKind fieldKind = fieldType.getKind();
-        if (pattern.getRepeatCount() > 0) {
-            toBytesMethod.beginControlFlow("for (int i = 0; i < $L && byteBuffer.hasRemaining(); i++)", pattern.repeat);
+        if (pattern.hasSetRepeat()) {
+            toBytesMethod.beginControlFlow("for (int i = 0; i < $L && byteBuffer.hasRemaining(); i++)", pattern.getFormattedRepeat());
             fieldType = ((DeclaredType) fieldType).getTypeArguments().get(0);
             Name simpleName = ((DeclaredType) fieldType).asElement().getSimpleName();
             if (simpleName.contentEquals("Integer")) {
@@ -621,7 +626,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             default:
                 return false;
         }
-        if (pattern.getRepeatCount() > 0) {
+        if (pattern.hasSetRepeat()) {
             toBytesMethod.endControlFlow();
         }
         if (hasCondition) {
