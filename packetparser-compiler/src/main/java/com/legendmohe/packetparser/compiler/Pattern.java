@@ -1,5 +1,8 @@
 package com.legendmohe.packetparser.compiler;
 
+import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
+
 /**
  * Created by legendmohe on 2017/6/9.
  */
@@ -69,7 +72,8 @@ class Pattern {
         return opt;
     }
 
-    public boolean containsIgnoreOpt() {
-        return opt != null && opt.contains("~");
+    public boolean shouldIgnore(Element element) {
+        return element.getModifiers().contains(Modifier.TRANSIENT)
+                || (opt != null && opt.contains("~"));
     }
 }

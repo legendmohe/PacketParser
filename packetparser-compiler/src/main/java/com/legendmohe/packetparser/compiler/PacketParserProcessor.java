@@ -322,7 +322,7 @@ public class PacketParserProcessor extends AbstractProcessor {
                 packetPattern) {
 
             // ignore opt
-            if (pattern.containsIgnoreOpt()) {
+            if (pattern.shouldIgnore(fieldNameSet.get(pattern.getAttr()))) {
                 continue;
             }
 
@@ -377,7 +377,7 @@ public class PacketParserProcessor extends AbstractProcessor {
         for (Pattern pattern :
                 patternList) {
             // ignore opt
-            if (pattern.containsIgnoreOpt()) {
+            if (pattern.shouldIgnore(fieldNameSet.get(pattern.getAttr()))) {
                 continue;
             }
 
@@ -484,7 +484,7 @@ public class PacketParserProcessor extends AbstractProcessor {
             parseMethod.beginControlFlow("if(" + condition + ")");
         }
 
-        String byteBufferString = pattern.containsIgnoreOpt() ? "byteBuffer.slice()" : "byteBuffer";
+        String byteBufferString = pattern.shouldIgnore(fieldNameSet.get(attr)) ? "byteBuffer.slice()" : "byteBuffer";
         String assignString = pattern.hasSetRepeat() ? ".add(" : " = ";
         String encloseString = pattern.hasSetRepeat() ? ")" : "";
         Element fieldElement = fieldNameSet.get(attr);
